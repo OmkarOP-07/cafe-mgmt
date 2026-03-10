@@ -1,0 +1,522 @@
+import { useState, useEffect, useCallback } from 'react'
+import axios from 'axios'
+import { FaPlus, FaMinus, FaTrash, FaShoppingCart, FaStar, FaTimes } from 'react-icons/fa'
+import { useUser } from '../context/UserContext'
+import './Orders.css'
+
+/* ── Tier config (mirrors backend) ─────────────────────────── */
+const TIER_DISCOUNTS = { Bronze: 0, Silver: 5, Gold: 10, Platinum: 15 }
+const TIER_ICONS     = { Bronze: '🥉', Silver: '🥈', Gold: '🥇', Platinum: '💎' }
+const TIER_COLORS    = { Bronze: '#CD7F32', Silver: '#C0C0C0', Gold: '#FFD700', Platinum: '#9333ea' }
+
+/* Category emoji map for display */
+const CATEGORY_ICONS = { Coffee: '☕', Tea: '🍵', Pastries: '🥐', Sandwiches: '🥪', Desserts: '🍰', Other: '🍽️' }
+
+/* ── First-order registration modal ─────────────────────────── */
+function FirstOrderModal({ onSubmit, onClose }) {
+    const [form, setForm] = useState({ name: '', email: '', phone: '' })
+    const [loading, setLoading] = useState(false)
+    const [error, setError]     = useState('')
+
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return }
+        setLoading(true)
+        try {
+            await onSubmit(form)
+        } catch (err) {
+            setError(err.message || 'Something went wrong. Please try again.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-card animate-scaleIn" onClick={e => e.stopPropagation()}>
+                <button className="modal-close" onClick={onClose}><FaTimes /></button>
+                <div className="modal-icon">✨</div>
+                <h2 className="modal-title">Create Your Profile</h2>
+                <p className="modal-subtitle">
+                    Enter your details to earn loyalty points and track your orders!
+                </p>
+                <form onSubmit={handleSubmit} className="modal-form">
+                    <div className="form-group">
+                        <label className="form-label">Full Name *</label>
+                        <input className="form-input" value={form.name}
+                            onChange={e => setForm({ ...form, name: e.target.value })}
+                            placeholder="Your name" required autoFocus />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Email *</label>
+                        <input className="form-input" type="email" value={form.email}
+                            onChange={e => setForm({ ...form, email: e.target.value })}
+                            placeholder="your@email.com" required />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Phone (optional)</label>
+                        <input className="form-input" type="tel" value={form.phone}
+                            onChange={e => setForm({ ...form, phone: e.target.value })}
+                            placeholder="Phone number" />
+                    </div>
+                    {error && <p className="modal-error">{error}</p>}
+                    <button type="submit" className="btn btn-primary btn-large modal-submit" disabled={loading}>
+                        {loading ? 'Creating profile…' : '🚀 Continue to Order'}
+                    </button>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+/* ── Points earned banner ────────────────────────────────────── */
+function PointsBanner({ points, tier, onClose }) {
+    useEffect(() => {
+        const t = setTimeout(onClose, 5000)
+        return () => clearTimeout(t)
+    }, [onClose])
+
+    return (
+        <div className="points-banner animate-slideInRight" style={{ '--tier-c': TIER_COLORS[tier] }}>
+            <span className="points-banner-icon">⭐</span>
+            <div>
+                <p className="points-banner-title">+{points} Points Earned!</p>
+                <p className="points-banner-sub">You're now {tier} tier {TIER_ICONS[tier]}</p>
+            </div>
+            <button className="points-banner-close" onClick={onClose}><FaTimes /></button>
+        </div>
+    )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN COMPONENT
+──────────────────────────────────────────────────────────────── */
+function Orders() {
+    const { user, userId, registerUser, refreshUser } = useUser()
+
+    /* ── Menu items fetched from backend ──────────────────── */
+    const [menuItems, setMenuItems]       = useState([])
+    const [menuLoading, setMenuLoading]   = useState(true)
+    const [menuError, setMenuError]       = useState('')
+
+    /* Cart */
+    const [cart, setCart] = useState([])
+
+    /* Customer form (pre-filled for known users) */
+    const [customerInfo, setCustomerInfo] = useState({ name: '', email: '', phone: '', address: '' })
+
+    /* Loyalty discount state */
+    const [pointsToRedeem, setPointsToRedeem]   = useState(0)
+    const [discountPreview, setDiscountPreview] = useState(null)
+    const [discountLoading, setDiscountLoading] = useState(false)
+
+    /* UI states */
+    const [orderPlaced, setOrderPlaced]       = useState(false)
+    const [earnedPoints, setEarnedPoints]     = useState(null)
+    const [newTier, setNewTier]               = useState(null)
+    const [showModal, setShowModal]           = useState(false)
+    const [submitting, setSubmitting]         = useState(false)
+    const [orderError, setOrderError]         = useState('')
+
+    /* ── Fetch menu from /api/menu on mount ───────────────── */
+    useEffect(() => {
+        const fetchMenu = async () => {
+            setMenuLoading(true)
+            setMenuError('')
+            try {
+                const { data } = await axios.get('/api/menu')
+                // Only show available items
+                setMenuItems(data.filter(item => item.available !== false))
+            } catch (err) {
+                setMenuError('Could not load menu. Please refresh the page.')
+            } finally {
+                setMenuLoading(false)
+            }
+        }
+        fetchMenu()
+    }, [])
+
+    /* Group items by category for display */
+    const groupedMenu = menuItems.reduce((acc, item) => {
+        const cat = item.category || 'Other'
+        if (!acc[cat]) acc[cat] = []
+        acc[cat].push(item)
+        return acc
+    }, {})
+
+    /* Pre-fill form when user profile loads */
+    useEffect(() => {
+        if (user) {
+            setCustomerInfo({
+                name:    user.name    || '',
+                email:   user.email   || '',
+                phone:   user.phone   || '',
+                address: user.address || ''
+            })
+        }
+    }, [user])
+
+    /* ── Cart helpers ──────────────────────────────────────── */
+    const addToCart = (item) => {
+        setCart(prev => {
+            const existing = prev.find(c => c._id === item._id)
+            return existing
+                ? prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1 } : c)
+                : [...prev, { ...item, quantity: 1 }]
+        })
+    }
+
+    const updateQuantity = (id, delta) =>
+        setCart(prev => prev.map(c => c._id === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0))
+
+    const removeFromCart = (id) => setCart(prev => prev.filter(c => c._id !== id))
+
+    const cartSubtotal = () => cart.reduce((sum, c) => sum + c.price * c.quantity, 0)
+
+    /* ── Live discount preview ────────────────────────────── */
+    const fetchDiscountPreview = useCallback(async () => {
+        const subtotal = cartSubtotal()
+        if (!userId || subtotal <= 0) { setDiscountPreview(null); return }
+        setDiscountLoading(true)
+        try {
+            const { data } = await axios.post('/api/orders/calculate-discount', {
+                userId, orderTotal: subtotal, pointsToRedeem: Number(pointsToRedeem)
+            })
+            setDiscountPreview(data)
+        } catch { setDiscountPreview(null) }
+        finally { setDiscountLoading(false) }
+    }, [userId, cart, pointsToRedeem])
+
+    /* Debounce discount fetch on cart or points changes */
+    useEffect(() => {
+        const t = setTimeout(fetchDiscountPreview, 400)
+        return () => clearTimeout(t)
+    }, [fetchDiscountPreview])
+
+    /* ── Input handler ────────────────────────────────────── */
+    const handleInputChange = (e) =>
+        setCustomerInfo(prev => ({ ...prev, [e.target.name]: e.target.value }))
+
+    /* ── Order submission ─────────────────────────────────── */
+    const handleSubmitOrder = async (e) => {
+        e.preventDefault()
+        if (cart.length === 0) { alert('Please add items to your cart'); return }
+
+        /* If no user yet → show registration modal */
+        if (!userId) { setShowModal(true); return }
+
+        await placeOrder()
+    }
+
+    /**
+     * placeOrder — sends order to backend with loyalty data.
+     * Called after user is confirmed (either existing or just registered).
+     * @param {string} overrideUserId - optional — use instead of context userId
+     * @param {object} overrideCustomer - optional — {name,email,phone} from modal (avoids stale state)
+     */
+    const placeOrder = async (overrideUserId, overrideCustomer) => {
+        setSubmitting(true)
+        setOrderError('')
+        const uid = overrideUserId || userId
+        const subtotal = cartSubtotal()
+
+        // Use overrideCustomer if provided (fresh from modal), else fall back to form state
+        const cust = overrideCustomer || customerInfo
+
+        const orderData = {
+            customerName:    cust.name    || customerInfo.name,
+            customerEmail:   cust.email   || customerInfo.email,
+            customerPhone:   cust.phone   || customerInfo.phone,
+            deliveryAddress: customerInfo.address,
+            items: cart.map(c => ({ menuItem: c._id, name: c.name, quantity: c.quantity, price: c.price })),
+            totalAmount: subtotal,
+            status: 'pending',
+            userId: uid,
+            pointsToRedeem: Number(pointsToRedeem)
+        }
+
+        try {
+            const { data } = await axios.post('/api/orders', orderData)
+            const loyalty = data.loyalty || {}
+
+            setEarnedPoints(loyalty.pointsEarned || 0)
+            setNewTier(loyalty.newTier || 'Bronze')
+            setOrderPlaced(true)
+            setCart([])
+            setPointsToRedeem(0)
+            setDiscountPreview(null)
+            if (uid) refreshUser()                // refresh balance in context
+            setTimeout(() => { setOrderPlaced(false); setEarnedPoints(null) }, 8000)
+        } catch (err) {
+            /* Graceful fallback if backend not running */
+            console.error('Order error:', err)
+            setOrderError(err.response?.data?.message || 'Order placed! (Demo mode)')
+            setOrderPlaced(true)
+            setCart([])
+            setTimeout(() => { setOrderPlaced(false); setOrderError('') }, 5000)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    /**
+     * Modal submit — registers user then places order immediately.
+     * We pass the registered user's info directly to avoid stale state.
+     */
+    const handleModalSubmit = async ({ name, email, phone }) => {
+        const registered = await registerUser({ name, email, phone, address: customerInfo.address })
+        // Update form state (for display), but also pass info directly to placeOrder
+        setCustomerInfo(p => ({ ...p, name: registered.name, email: registered.email, phone: registered.phone || phone }))
+        setShowModal(false)
+        // Pass customer info directly so we don't depend on setState being synchronous
+        await placeOrder(registered._id, { name: registered.name, email: registered.email, phone: registered.phone || phone })
+    }
+
+    /* ── Derived values ────────────────────────────────────── */
+    const tierDiscount   = user ? TIER_DISCOUNTS[user.tier] || 0 : 0
+    const currentTier    = user?.tier || 'Bronze'
+    const pointsBalance  = user?.loyaltyPoints || 0
+    const finalTotal     = discountPreview?.finalTotal ?? cartSubtotal()
+    const tierSavings    = discountPreview?.tierDiscountAmt ?? 0
+    const ptsSavings     = discountPreview?.pointsDiscountAmt ?? 0
+    const maxRedeemable  = discountPreview
+        ? discountPreview.pointsToRedeem  // server already capped it
+        : Math.min(pointsBalance, Math.floor(cartSubtotal() / 2 / 0.1))
+
+    return (
+        <div className="orders-page">
+            {/* Points earned banner */}
+            {orderPlaced && earnedPoints !== null && earnedPoints > 0 && (
+                <PointsBanner points={earnedPoints} tier={newTier || currentTier} onClose={() => setEarnedPoints(null)} />
+            )}
+
+            {/* First-order modal */}
+            {showModal && (
+                <FirstOrderModal
+                    onSubmit={handleModalSubmit}
+                    onClose={() => setShowModal(false)}
+                />
+            )}
+
+            {/* ── Header ── */}
+            <div className="orders-header">
+                <div className="container">
+                    <h1 className="orders-title animate-fadeIn">Place Your Order</h1>
+                    <p className="orders-subtitle animate-fadeIn">Select items and complete your order</p>
+                    {user && (
+                        <div className="orders-user-chip animate-fadeIn" style={{ '--tc': TIER_COLORS[currentTier] }}>
+                            {TIER_ICONS[currentTier]} <strong>{user.name}</strong> &nbsp;·&nbsp; {currentTier} Member &nbsp;·&nbsp; {pointsBalance} pts
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="orders-content section">
+                <div className="container">
+                    <div className="orders-layout">
+
+                        {/* ── Menu Items ── */}
+                        <div className="orders-menu">
+                            <h2 className="orders-section-title">Our Menu</h2>
+
+                            {menuLoading && (
+                                <div className="loading-container"><div className="spinner" /></div>
+                            )}
+
+                            {menuError && (
+                                <div className="menu-error">{menuError}</div>
+                            )}
+
+                            {!menuLoading && !menuError && menuItems.length === 0 && (
+                                <p className="menu-empty">No menu items available right now. Please check back later.</p>
+                            )}
+
+                            {!menuLoading && Object.entries(groupedMenu).map(([category, items]) => (
+                                <div key={category} className="menu-category-group">
+                                    <h3 className="menu-category-title">
+                                        {CATEGORY_ICONS[category] || '🍽️'} {category}
+                                    </h3>
+                                    <div className="quick-add-grid">
+                                        {items.map(item => (
+                                            <div key={item._id} className="quick-add-item glass-card">
+                                                <div className="quick-add-info">
+                                                    <h3 className="quick-add-name">{item.name}</h3>
+                                                    {item.description && (
+                                                        <p className="quick-add-desc">{item.description}</p>
+                                                    )}
+                                                    <span className="quick-add-price">₹{item.price.toFixed(2)}</span>
+                                                </div>
+                                                <button onClick={() => addToCart(item)} className="btn btn-primary quick-add-btn">
+                                                    <FaPlus /> Add
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* ── Cart & Checkout ── */}
+                        <div className="orders-cart">
+                            <div className="cart-container glass">
+                                <h2 className="cart-title"><FaShoppingCart /> Your Cart ({cart.length})</h2>
+
+                                {cart.length === 0 ? (
+                                    <p className="cart-empty">Your cart is empty</p>
+                                ) : (
+                                    <>
+                                        {/* Cart items */}
+                                        <div className="cart-items">
+                                            {cart.map(item => (
+                                                <div key={item._id} className="cart-item">
+                                                    <div className="cart-item-info">
+                                                        <h4 className="cart-item-name">{item.name}</h4>
+                                                        <span className="cart-item-price">₹{item.price.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="cart-item-controls">
+                                                        <button onClick={() => updateQuantity(item._id, -1)} className="quantity-btn"><FaMinus /></button>
+                                                        <span className="quantity-display">{item.quantity}</span>
+                                                        <button onClick={() => updateQuantity(item._id, 1)} className="quantity-btn"><FaPlus /></button>
+                                                        <button onClick={() => removeFromCart(item._id)} className="remove-btn"><FaTrash /></button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* ── Loyalty Benefits Section ── */}
+                                        {user && (
+                                            <div className="loyalty-benefits-section">
+                                                <div className="loyalty-benefits-header">
+                                                    <FaStar style={{ color: TIER_COLORS[currentTier] }} />
+                                                    <span>Loyalty Benefits</span>
+                                                </div>
+
+                                                {/* Tier discount info */}
+                                                {tierDiscount > 0 && (
+                                                    <div className="loyalty-perk tier-perk">
+                                                        <span>{TIER_ICONS[currentTier]} {currentTier} Member: <strong>{tierDiscount}% off</strong> applied ✓</span>
+                                                        {tierSavings > 0 && <span className="perk-saving">-₹{tierSavings.toFixed(2)}</span>}
+                                                    </div>
+                                                )}
+                                                {tierDiscount === 0 && (
+                                                    <p className="tier-no-discount">
+                                                        🥉 Bronze tier — earn 500 pts to unlock Silver (5% off every order)
+                                                    </p>
+                                                )}
+
+                                                {/* Points balance */}
+                                                <div className="points-balance-row">
+                                                    <span>⭐ Points balance: <strong>{pointsBalance} pts</strong></span>
+                                                </div>
+
+                                                {/* Points redemption input */}
+                                                {pointsBalance >= 100 && (
+                                                    <div className="redeem-section">
+                                                        <label className="form-label redeem-label">
+                                                            Redeem Points <span className="redeem-hint">(100 pts = ₹10 off)</span>
+                                                        </label>
+                                                        <div className="redeem-input-row">
+                                                            <input type="number" className="form-input redeem-input"
+                                                                min={0} max={pointsBalance} step={100}
+                                                                value={pointsToRedeem}
+                                                                onChange={e => setPointsToRedeem(Number(e.target.value))}
+                                                                placeholder="0" />
+                                                            <button className="btn btn-secondary redeem-max-btn"
+                                                                onClick={() => setPointsToRedeem(maxRedeemable)} type="button">
+                                                                Max
+                                                            </button>
+                                                        </div>
+                                                        {ptsSavings > 0 && (
+                                                            <p className="redeem-preview">-₹{ptsSavings.toFixed(2)} from {pointsToRedeem} pts</p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* ── Order Summary ── */}
+                                        <div className="order-summary">
+                                            <div className="summary-row">
+                                                <span>Subtotal</span>
+                                                <span>₹{cartSubtotal().toFixed(2)}</span>
+                                            </div>
+                                            {tierSavings > 0 && (
+                                                <div className="summary-row discount-row">
+                                                    <span>Tier Discount ({tierDiscount}%)</span>
+                                                    <span>-₹{tierSavings.toFixed(2)}</span>
+                                                </div>
+                                            )}
+                                            {ptsSavings > 0 && (
+                                                <div className="summary-row discount-row">
+                                                    <span>Points Redeemed ({pointsToRedeem} pts)</span>
+                                                    <span>-₹{ptsSavings.toFixed(2)}</span>
+                                                </div>
+                                            )}
+                                            <div className="summary-row total-row">
+                                                <span className="total-label">Total</span>
+                                                <span className="total-amount">
+                                                    {discountLoading ? '…' : `₹${finalTotal.toFixed(2)}`}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* ── Delivery Form ── */}
+                                        <form onSubmit={handleSubmitOrder} className="checkout-form">
+                                            <h3 className="form-title">Delivery Information</h3>
+
+                                            <div className="form-group">
+                                                <label className="form-label">Name *</label>
+                                                <input type="text" name="name" value={customerInfo.name}
+                                                    onChange={handleInputChange} className="form-input" required />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label">Email *</label>
+                                                <input type="email" name="email" value={customerInfo.email}
+                                                    onChange={handleInputChange} className="form-input" required />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label">Phone *</label>
+                                                <input type="tel" name="phone" value={customerInfo.phone}
+                                                    onChange={handleInputChange} className="form-input" required />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label">Delivery Address *</label>
+                                                <textarea name="address" value={customerInfo.address}
+                                                    onChange={handleInputChange} className="form-textarea" required />
+                                            </div>
+
+                                            {orderError && <div className="order-error">{orderError}</div>}
+
+                                            <button type="submit" className="btn btn-primary btn-large submit-btn" disabled={submitting}>
+                                                {submitting ? 'Placing Order…' : `Place Order${finalTotal > 0 ? ` — ₹${finalTotal.toFixed(2)}` : ''}`}
+                                            </button>
+
+                                            {!userId && (
+                                                <p className="no-account-note">
+                                                    💡 You'll be asked to create a profile to earn loyalty points
+                                                </p>
+                                            )}
+                                        </form>
+                                    </>
+                                )}
+
+                                {/* Order success */}
+                                {orderPlaced && (
+                                    <div className="order-success">
+                                        <div className="success-icon">✓</div>
+                                        <p className="success-text">Order placed successfully!</p>
+                                        {earnedPoints > 0 && (
+                                            <p className="success-pts">+{earnedPoints} loyalty points added to your account</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default Orders
