@@ -93,6 +93,35 @@
     color: var(--color-primary);
 }
 
+/* ── Logout button ── */
+.profile-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    align-self: center;
+    padding: 0.55rem 1.1rem;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1.5px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-full);
+    color: #ef4444;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.profile-logout-btn:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: white;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    transform: translateY(-1px);
+}
+
+
+
 /* ── Tabs ── */
 .profile-body {
     max-width: 900px;
@@ -457,7 +486,7 @@
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-    .profile-hero-content { flex-direction: column; text-align: center; }
+    .profile-hero-content { flex-direction: column; text-align: center; align-items: center; }
     .profile-stats { justify-content: center; }
     .profile-form .form-row { grid-template-columns: 1fr; }
     .loyalty-top { flex-direction: column; gap: var(--spacing-md); }
@@ -465,4 +494,6 @@
     .ph-header-row, .ph-row { grid-template-columns: 110px 1fr 70px; }
     .profile-tabs { gap: 0.35rem; }
     .profile-tab { font-size: var(--font-size-xs); padding: 0.5rem 0.85rem; }
+    .profile-logout-btn { margin-left: 0; }
 }
+

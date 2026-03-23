@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import bcrypt from 'bcryptjs'
 
 /**
  * Points history entry — logs every loyalty transaction for audit trail
@@ -40,6 +41,10 @@ const userSchema = new mongoose.Schema({
         type: String,   // URL to avatar image
         default: ''
     },
+    password: {
+        type: String,
+        default: null   // null = legacy user without password
+    },
 
     /* ── Loyalty fields ─────────────────────────────────────── */
     loyaltyPoints: {
@@ -67,6 +72,20 @@ const userSchema = new mongoose.Schema({
     pointsHistory: [pointsHistorySchema]
 
 }, { timestamps: true })
+
+/* ── Hash password before saving if it was modified ─────────── */
+userSchema.pre('save', async function (next) {
+    if (this.isModified('password') && this.password) {
+        this.password = await bcrypt.hash(this.password, 12)
+    }
+    next()
+})
+
+/* ── Instance method: compare raw vs hashed password ─────────── */
+userSchema.methods.comparePassword = async function (candidate) {
+    if (!this.password) return false
+    return bcrypt.compare(candidate, this.password)
+}
 
 /* ── Helper: derive tier from lifetime points earned ───────── */
 userSchema.statics.getTierForPoints = function (totalLifetimePoints) {

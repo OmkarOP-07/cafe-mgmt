@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { FaSignOutAlt } from 'react-icons/fa'
 import { useUser } from '../context/UserContext'
 import './Profile.css'
 
@@ -34,7 +36,8 @@ const statusColors = {
 }
 
 function Profile() {
-    const { user, userId, refreshUser, updateUserLocally } = useUser()
+    const { user, userId, refreshUser, updateUserLocally, logoutUser } = useUser()
+    const navigate = useNavigate()
 
     /* ── Tab state ── */
     const [activeTab, setActiveTab] = useState('profile')
@@ -118,6 +121,14 @@ function Profile() {
         ? new Date(user.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })
         : ''
 
+    /* ── Logout ── */
+    const handleLogout = () => {
+        if (window.confirm('Are you sure you want to log out?')) {
+            logoutUser()
+            navigate('/')
+        }
+    }
+
     if (!userId || !user) {
         return (
             <div className="profile-page">
@@ -155,6 +166,11 @@ function Profile() {
                                 <div className="stat-chip"><span className="stat-val">{pts}</span> Points</div>
                             </div>
                         </div>
+                        {/* Logout */}
+                        <button className="profile-logout-btn" onClick={handleLogout} title="Log out">
+                            <FaSignOutAlt />
+                            <span>Logout</span>
+                        </button>
                     </div>
                 </div>
             </div>

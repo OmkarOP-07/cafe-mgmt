@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { FaPlus, FaMinus, FaTrash, FaShoppingCart, FaStar, FaTimes } from 'react-icons/fa'
 import { useUser } from '../context/UserContext'
+import AuthModal from '../components/AuthModal'
 import './Orders.css'
 
 /* ── Tier config (mirrors backend) ─────────────────────────── */
@@ -12,62 +13,6 @@ const TIER_COLORS    = { Bronze: '#CD7F32', Silver: '#C0C0C0', Gold: '#FFD700', 
 /* Category emoji map for display */
 const CATEGORY_ICONS = { Coffee: '☕', Tea: '🍵', Pastries: '🥐', Sandwiches: '🥪', Desserts: '🍰', Other: '🍽️' }
 
-/* ── First-order registration modal ─────────────────────────── */
-function FirstOrderModal({ onSubmit, onClose }) {
-    const [form, setForm] = useState({ name: '', email: '', phone: '' })
-    const [loading, setLoading] = useState(false)
-    const [error, setError]     = useState('')
-
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return }
-        setLoading(true)
-        try {
-            await onSubmit(form)
-        } catch (err) {
-            setError(err.message || 'Something went wrong. Please try again.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-card animate-scaleIn" onClick={e => e.stopPropagation()}>
-                <button className="modal-close" onClick={onClose}><FaTimes /></button>
-                <div className="modal-icon">✨</div>
-                <h2 className="modal-title">Create Your Profile</h2>
-                <p className="modal-subtitle">
-                    Enter your details to earn loyalty points and track your orders!
-                </p>
-                <form onSubmit={handleSubmit} className="modal-form">
-                    <div className="form-group">
-                        <label className="form-label">Full Name *</label>
-                        <input className="form-input" value={form.name}
-                            onChange={e => setForm({ ...form, name: e.target.value })}
-                            placeholder="Your name" required autoFocus />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Email *</label>
-                        <input className="form-input" type="email" value={form.email}
-                            onChange={e => setForm({ ...form, email: e.target.value })}
-                            placeholder="your@email.com" required />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Phone (optional)</label>
-                        <input className="form-input" type="tel" value={form.phone}
-                            onChange={e => setForm({ ...form, phone: e.target.value })}
-                            placeholder="Phone number" />
-                    </div>
-                    {error && <p className="modal-error">{error}</p>}
-                    <button type="submit" className="btn btn-primary btn-large modal-submit" disabled={loading}>
-                        {loading ? 'Creating profile…' : '🚀 Continue to Order'}
-                    </button>
-                </form>
-            </div>
-        </div>
-    )
-}
 
 /* ── Points earned banner ────────────────────────────────────── */
 function PointsBanner({ points, tier, onClose }) {
@@ -92,7 +37,8 @@ function PointsBanner({ points, tier, onClose }) {
    MAIN COMPONENT
 ──────────────────────────────────────────────────────────────── */
 function Orders() {
-    const { user, userId, registerUser, refreshUser } = useUser()
+    const { user, userId, loginUser, registerUser, refreshUser } = useUser()
+
 
     /* ── Menu items fetched from backend ──────────────────── */
     const [menuItems, setMenuItems]       = useState([])
@@ -114,7 +60,8 @@ function Orders() {
     const [orderPlaced, setOrderPlaced]       = useState(false)
     const [earnedPoints, setEarnedPoints]     = useState(null)
     const [newTier, setNewTier]               = useState(null)
-    const [showModal, setShowModal]           = useState(false)
+    const [showAuthModal, setShowAuthModal]   = useState(false)
+    const [pendingItem, setPendingItem]       = useState(null)   // item waiting to be added after auth
     const [submitting, setSubmitting]         = useState(false)
     const [orderError, setOrderError]         = useState('')
 
@@ -158,6 +105,12 @@ function Orders() {
 
     /* ── Cart helpers ──────────────────────────────────────── */
     const addToCart = (item) => {
+        // Gate: require login before adding to cart
+        if (!userId) {
+            setPendingItem(item)
+            setShowAuthModal(true)
+            return
+        }
         setCart(prev => {
             const existing = prev.find(c => c._id === item._id)
             return existing
@@ -201,10 +154,7 @@ function Orders() {
     const handleSubmitOrder = async (e) => {
         e.preventDefault()
         if (cart.length === 0) { alert('Please add items to your cart'); return }
-
-        /* If no user yet → show registration modal */
-        if (!userId) { setShowModal(true); return }
-
+        if (!userId) { setShowAuthModal(true); return }
         await placeOrder()
     }
 
@@ -260,16 +210,28 @@ function Orders() {
     }
 
     /**
-     * Modal submit — registers user then places order immediately.
-     * We pass the registered user's info directly to avoid stale state.
+     * handleAuthSuccess — called when user logs in / signs up via AuthModal.
+     * Auto-adds the pending item (if any) then closes the modal.
      */
-    const handleModalSubmit = async ({ name, email, phone }) => {
-        const registered = await registerUser({ name, email, phone, address: customerInfo.address })
-        // Update form state (for display), but also pass info directly to placeOrder
-        setCustomerInfo(p => ({ ...p, name: registered.name, email: registered.email, phone: registered.phone || phone }))
-        setShowModal(false)
-        // Pass customer info directly so we don't depend on setState being synchronous
-        await placeOrder(registered._id, { name: registered.name, email: registered.email, phone: registered.phone || phone })
+    const handleAuthSuccess = (loggedInUser) => {
+        setShowAuthModal(false)
+        // Pre-fill checkout form
+        setCustomerInfo(p => ({
+            ...p,
+            name:  loggedInUser.name  || p.name,
+            email: loggedInUser.email || p.email,
+            phone: loggedInUser.phone || p.phone,
+        }))
+        // Add the item that triggered the auth flow
+        if (pendingItem) {
+            setCart(prev => {
+                const existing = prev.find(c => c._id === pendingItem._id)
+                return existing
+                    ? prev.map(c => c._id === pendingItem._id ? { ...c, quantity: c.quantity + 1 } : c)
+                    : [...prev, { ...pendingItem, quantity: 1 }]
+            })
+            setPendingItem(null)
+        }
     }
 
     /* ── Derived values ────────────────────────────────────── */
@@ -290,11 +252,13 @@ function Orders() {
                 <PointsBanner points={earnedPoints} tier={newTier || currentTier} onClose={() => setEarnedPoints(null)} />
             )}
 
-            {/* First-order modal */}
-            {showModal && (
-                <FirstOrderModal
-                    onSubmit={handleModalSubmit}
-                    onClose={() => setShowModal(false)}
+            {/* Auth modal (login / sign-up) */}
+            {showAuthModal && (
+                <AuthModal
+                    onSuccess={handleAuthSuccess}
+                    onClose={() => { setShowAuthModal(false); setPendingItem(null) }}
+                    loginUser={loginUser}
+                    registerUser={registerUser}
                 />
             )}
 
@@ -493,9 +457,10 @@ function Orders() {
 
                                             {!userId && (
                                                 <p className="no-account-note">
-                                                    💡 You'll be asked to create a profile to earn loyalty points
+                                                    🔐 <button type="button" className="inline-auth-btn" onClick={() => setShowAuthModal(true)}>Sign in or create an account</button> to earn loyalty points
                                                 </p>
                                             )}
+
                                         </form>
                                     </>
                                 )}

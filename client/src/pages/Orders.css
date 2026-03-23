@@ -442,6 +442,23 @@
     margin-top: 0.5rem;
 }
 
+.inline-auth-btn {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: inherit;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    transition: color 0.15s;
+}
+
+.inline-auth-btn:hover {
+    color: #c2410c;
+}
+
+
 /* ── First-order modal ───────────────────────────── */
 .modal-overlay {
     position: fixed;
