@@ -33,9 +33,30 @@ const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGODB_URI)
         console.log('✓ MongoDB connected successfully')
+        await initAdmin()
     } catch (error) {
         console.error('✗ MongoDB connection error:', error.message)
         process.exit(1)
+    }
+}
+
+import User from './models/User.js'
+
+const initAdmin = async () => {
+    try {
+        const adminExists = await User.findOne({ email: 'admin@cafe.com' })
+        if (!adminExists) {
+            const admin = new User({
+                name: 'Cafe Admin',
+                email: 'admin@cafe.com',
+                password: 'adminpass', // Will be hashed by pre-save hook
+                isAdmin: true
+            })
+            await admin.save()
+            console.log('✓ Default admin account created: admin@cafe.com / adminpass')
+        }
+    } catch (err) {
+        console.error('✗ Failed to seed admin account:', err.message)
     }
 }
 
