@@ -1,0 +1,115 @@
+/* Admin Shared Styles */
+
+.admin-page {
+    width: 100%;
+}
+
+.admin-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.admin-page-header h2 {
+    font-size: var(--font-size-3xl);
+    color: var(--color-primary);
+}
+
+.admin-table-container {
+    overflow-x: auto;
+    padding: 0;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.admin-table th,
+.admin-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table th {
+    background: hsla(25, 95%, 53%, 0.05);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.admin-table tr:hover {
+    background: hsla(0, 0%, 0%, 0.02);
+}
+
+.admin-img-thumb {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+}
+
+.text-small {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.status-badge.success { background: #d4edda; color: #155724; }
+.status-badge.danger { background: #f8d7da; color: #721c24; }
+.status-badge.warning { background: #fff3cd; color: #856404; }
+.status-badge.info { background: #cce5ff; color: #004085; }
+
+.btn-icon {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    margin-right: var(--spacing-xs);
+    opacity: 0.7;
+    transition: opacity var(--transition-fast);
+}
+
+.btn-icon:hover { opacity: 1; }
+
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: var(--spacing-md);
+}
+
+.modal-content {
+    background: white;
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-content h3 {
+    margin-bottom: var(--spacing-md);
+    color: var(--color-primary);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--spacing-xs);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--spacing-md);
+}

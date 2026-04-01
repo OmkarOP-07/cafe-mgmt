@@ -45,6 +45,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null   // null = legacy user without password
     },
+    isAdmin: {
+        type: Boolean,
+        default: false
+    },
 
     /* ── Loyalty fields ─────────────────────────────────────── */
     loyaltyPoints: {

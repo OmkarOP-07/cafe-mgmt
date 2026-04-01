@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FaCoffee, FaBars, FaTimes } from 'react-icons/fa'
+import { useUser } from '../context/UserContext'
 import './Navbar.css'
 
 function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     const location = useLocation()
+    const navigate = useNavigate()
+    const { user, logoutUser } = useUser()
 
     useEffect(() => {
         const handleScroll = () => {
@@ -21,13 +24,27 @@ function Navbar() {
         setIsMobileMenuOpen(false)
     }, [location])
 
+    const handleLogout = () => {
+        logoutUser()
+        navigate('/')
+    }
+
     const navLinks = [
         { path: '/', label: 'Home' },
         { path: '/menu', label: 'Menu' },
         { path: '/orders', label: 'Orders' },
-        { path: '/contact', label: 'Contact' },
-        { path: '/profile', label: '👤 Profile' }
+        { path: '/contact', label: 'Contact' }
     ]
+
+    if (user) {
+        navLinks.push({ path: '/profile', label: '👤 Profile' })
+        if (user.isAdmin) {
+            navLinks.push({ path: '/admin/menu', label: '⚙️ Admin' })
+        }
+        navLinks.push({ action: handleLogout, label: '🚪 Logout' })
+    } else {
+        navLinks.push({ path: '/login', label: '🔑 Login' })
+    }
 
     return (
         <nav className={`navbar ${isScrolled ? 'navbar-scrolled' : ''}`}>
@@ -39,13 +56,23 @@ function Navbar() {
 
                 <ul className={`navbar-menu ${isMobileMenuOpen ? 'navbar-menu-open' : ''}`}>
                     {navLinks.map((link) => (
-                        <li key={link.path} className="navbar-item">
-                            <Link
-                                to={link.path}
-                                className={`navbar-link ${location.pathname === link.path ? 'navbar-link-active' : ''}`}
-                            >
-                                {link.label}
-                            </Link>
+                        <li key={link.label} className="navbar-item">
+                            {link.action ? (
+                                <button
+                                    onClick={link.action}
+                                    className="navbar-link"
+                                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', outline: 'none' }}
+                                >
+                                    {link.label}
+                                </button>
+                            ) : (
+                                <Link
+                                    to={link.path}
+                                    className={`navbar-link ${location.pathname === link.path ? 'navbar-link-active' : ''}`}
+                                >
+                                    {link.label}
+                                </Link>
+                            )}
                         </li>
                     ))}
                 </ul>

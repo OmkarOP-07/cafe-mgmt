@@ -28,6 +28,19 @@ router.post('/', async (req, res) => {
 })
 
 /* ─────────────────────────────────────────────────────────────
+   GET /api/users
+   Fetch all users for the admin dashboard.
+──────────────────────────────────────────────────────────────── */
+router.get('/', async (req, res) => {
+    try {
+        const users = await User.find().select('-pointsHistory -password').sort({ createdAt: -1 })
+        res.json(users)
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching users', error: error.message })
+    }
+})
+
+/* ─────────────────────────────────────────────────────────────
    GET /api/users/:id
    Fetch full user profile including tier progress info.
 ──────────────────────────────────────────────────────────────── */

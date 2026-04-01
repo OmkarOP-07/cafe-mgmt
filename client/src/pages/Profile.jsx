@@ -123,10 +123,8 @@ function Profile() {
 
     /* ── Logout ── */
     const handleLogout = () => {
-        if (window.confirm('Are you sure you want to log out?')) {
-            logoutUser()
-            navigate('/')
-        }
+        logoutUser()
+        navigate('/')
     }
 
     if (!userId || !user) {
