@@ -43,20 +43,33 @@ const connectDB = async () => {
 import User from './models/User.js'
 
 const initAdmin = async () => {
-    try {
-        const adminExists = await User.findOne({ email: 'admin@cafe.com' })
-        if (!adminExists) {
-            const admin = new User({
-                name: 'Cafe Admin',
-                email: 'admin@cafe.com',
-                password: 'adminpass', // Will be hashed by pre-save hook
-                isAdmin: true
-            })
-            await admin.save()
-            console.log('✓ Default admin account created: admin@cafe.com / adminpass')
+    const admins = [
+        {
+            name: 'Omkar Potdar',
+            email: process.env.ADMIN1_EMAIL || 'ompotdar7498@gmail.com',
+            password: process.env.ADMIN1_PASS || 'adminpass1'
+        },
+        {
+            name: 'Shubham Jain',
+            email: process.env.ADMIN2_EMAIL || 'shubhamjain26tt@gmail.com',
+            password: process.env.ADMIN2_PASS || 'adminpass2'
         }
-    } catch (err) {
-        console.error('✗ Failed to seed admin account:', err.message)
+    ]
+
+    for (const admin of admins) {
+        const exists = await User.findOne({ email: admin.email })
+        if (!exists) {
+            const newAdmin = new User({ ...admin, isAdmin: true })
+            await newAdmin.save()
+            console.log(`✓ Admin created: ${admin.email}`)
+        } else if (!exists.isAdmin) {
+            // If user already exists but isn't marked as admin, promote them
+            exists.isAdmin = true
+            await exists.save()
+            console.log(`✓ Promoted to admin: ${admin.email}`)
+        } else {
+            console.log(`✓ Admin already exists: ${admin.email}`)
+        }
     }
 }
 

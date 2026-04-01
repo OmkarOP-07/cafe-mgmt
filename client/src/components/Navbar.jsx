@@ -36,12 +36,15 @@ function Navbar() {
         { path: '/contact', label: 'Contact' }
     ]
 
+    const isAdminPage = location.pathname.startsWith('/admin')
+
     if (user) {
-        navLinks.push({ path: '/profile', label: '👤 Profile' })
+        if (!user.isAdmin) {
+            navLinks.push({ path: '/profile', label: '👤 Profile' })
+        }
         if (user.isAdmin) {
             navLinks.push({ path: '/admin/menu', label: '⚙️ Admin' })
         }
-        navLinks.push({ action: handleLogout, label: '🚪 Logout' })
     } else {
         navLinks.push({ path: '/login', label: '🔑 Login' })
     }

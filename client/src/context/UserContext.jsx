@@ -63,11 +63,11 @@ export function UserProvider({ children }) {
      * registerUser — create account (with password) via /api/auth/register.
      * Falls back to legacy /api/users if no password provided (e.g. from order flow).
      */
-    const registerUser = async ({ name, email, phone = '', address = '', password }) => {
+    const registerUser = async ({ name, email, phone = '', address = '', password, otp }) => {
         if (password) {
             // Full auth registration
             try {
-                const { data } = await axios.post('/api/auth/register', { name, email, phone, address, password })
+                const { data } = await axios.post('/api/auth/register', { name, email, phone, address, password, otp })
                 persistSession(data.user, data.token)
                 return data.user
             } catch (err) {
